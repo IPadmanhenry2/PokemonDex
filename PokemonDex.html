@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pokédex mit TCG-Karten</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: url('https://motionarray.imgix.net/2069896-ilxnk7j2UB-high_0014.jpg?w=660&q=60&fit=max&auto=format') no-repeat center center fixed;
+      background-size: cover;
+      color: #fff;
+      overflow-x: hidden;
+    }
+    header {
+      padding: 1.5em;
+      text-align: center;
+      font-size: 2em;
+      font-weight: bold;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+    }
+    .search-bar {
+      text-align: center;
+      margin: 1.5em;
+    }
+    .search-bar input, .search-bar button {
+      font-size: 1em;
+      border-radius: 5px;
+      border: none;
+    }
+    .search-bar input {
+      padding: 0.6em;
+      width: 220px;
+    }
+    .search-bar button {
+      padding: 0.6em 1em;
+      background-color: #ffcb05;
+      color: #2a2a2a;
+      font-weight: bold;
+      cursor: pointer;
+      margin-left: 0.5em;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1em;
+      padding: 2em;
+      max-width: 1200px;
+      margin: auto;
+      background-color: rgba(0, 0, 0, 0.4);
+      border-radius: 12px;
+    }
+    .card {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 1em;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .card:hover {
+      transform: scale(1.05);
+    }
+    .card img {
+      width: 96px;
+      height: 96px;
+    }
+    .details {
+      max-width: 800px;
+      margin: 2em auto;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 1.5em;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .tcg-cards {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1em;
+      margin-top: 1em;
+    }
+    .tcg-card {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 1em;
+      text-align: center;
+      width: 150px;
+      cursor: pointer;
+    }
+    .tcg-card img {
+      width: 100%;
+      border-radius: 5px;
+    }
+    .total-value {
+      text-align: center;
+      margin: 1em;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    #zurueckBtn {
+      display: none;
+      position: fixed;
+      top: 1em;
+      left: 1em;
+      font-size: 1.5em;
+      background: rgba(0,0,0,0.6);
+      padding: 0.3em 0.6em;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+
+<header>Pokédex mit TCG-Karten</header>
+
+<div class="search-bar">
+  <input type="text" id="searchInput" placeholder="z. B. Pikachu">
+  <button onclick="suchePokemon()">Suchen</button>
+</div>
+
+<div id="zurueckBtn" onclick="zeigeListe()">← Zurück</div>
+
+<div class="total-value" id="totalValue">Gesamtwert deiner Sammlung: 0.00 €</div>
+
+<div class="container" id="cardContainer"></div>
+<div id="detailsContainer"></div>
+
+<script>
+  const cardContainer = document.getElementById("cardContainer");
+  const detailsContainer = document.getElementById("detailsContainer");
+  const totalValueElement = document.getElementById("totalValue");
+  const zurueckBtn = document.getElementById("zurueckBtn");
+
+  async function ladePokemon(name = "") {
+    cardContainer.innerHTML = "Lade Pokémon...";
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=1025`);
+    const data = await res.json();
+    const filtered = data.results.filter(p => p.name.includes(name.toLowerCase()));
+    const promises = filtered.map(p => fetch(p.url).then(r => r.json()));
+    const allData = await Promise.all(promises);
+    cardContainer.innerHTML = "";
+    allData.forEach(p => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `<img src="${p.sprites.front_default}" alt="${p.name}"><h3>${p.name}</h3>`;
+      card.onclick = () => zeigeDetails(p.name);
+      cardContainer.appendChild(card);
+    });
+  }
+
+  async function zeigeDetails(name) {
+    zurueckBtn.style.display = "block";
+    cardContainer.style.display = "none";
+
+    const tcgRes = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${name}`);
+    const tcgData = await tcgRes.json();
+
+    detailsContainer.innerHTML = `
+      <div class="details">
+        <h2>${name}</h2>
+        <div class="tcg-cards">
+          ${tcgData.data.map(card => `
+            <div class="tcg-card" onclick="karteHinzufuegen('${card.id}')">
+              <img src="${card.images.small}" />
+              <p><strong>${(card.cardmarket?.prices?.averageSellPrice || 0).toFixed(2)} €</strong></p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function zeigeListe() {
+    cardContainer.style.display = "grid";
+    detailsContainer.innerHTML = "";
+    zurueckBtn.style.display = "none";
+  }
+
+  function karteHinzufuegen(cardId) {
+    let karten = JSON.parse(getCookie("karten") || "[]");
+    if (!karten.includes(cardId)) {
+      karten.push(cardId);
+      document.cookie = "karten=" + JSON.stringify(karten) + "; path=/";
+      berechneGesamtwert();
+    }
+  }
+
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    if (match) return decodeURIComponent(match[2]);
+    return null;
+  }
+
+  async function berechneGesamtwert() {
+    let karten = JSON.parse(getCookie("karten") || "[]");
+    let summe = 0;
+    for (let id of karten) {
+      const res = await fetch(`https://api.pokemontcg.io/v2/cards/${id}`);
+      const card = await res.json();
+      summe += card.data.cardmarket?.prices?.averageSellPrice || 0;
+    }
+    totalValueElement.innerText = `Gesamtwert deiner Sammlung: ${summe.toFixed(2)} €`;
+  }
+
+  function suchePokemon() {
+    const query = document.getElementById("searchInput").value;
+    ladePokemon(query);
+  }
+
+  ladePokemon();
+  berechneGesamtwert();
+</script>
+
+</body>
+</html>
