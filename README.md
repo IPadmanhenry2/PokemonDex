@@ -1,2 +1,0 @@
-# PokemonDex
-Hi im Gian 
